@@ -445,6 +445,10 @@ setGeneric("fillna", function(x, value, cols = NULL) { standardGeneric("fillna")
 #' @export
 setGeneric("filter", function(x, condition) { standardGeneric("filter") })
 
+#' @rdname statfunctions
+#' @export
+setGeneric("freqItems", function(x, cols, support = 0.01) { standardGeneric("freqItems") })
+
 #' @rdname groupBy
 #' @export
 setGeneric("group_by", function(x, ...) { standardGeneric("group_by") })
@@ -504,6 +508,10 @@ setGeneric("sample",
 #' @export
 setGeneric("sample_frac",
            function(x, withReplacement, fraction, seed) { standardGeneric("sample_frac") })
+
+#' @rdname statfunctions
+#' @export
+setGeneric("sampleBy", function(x, col, fractions, seed) { standardGeneric("sampleBy") })
 
 #' @rdname saveAsParquetFile
 #' @export

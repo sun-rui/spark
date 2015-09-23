@@ -100,3 +100,61 @@ setMethod("corr",
             statFunctions <- callJMethod(x@sdf, "stat")
             callJMethod(statFunctions, "corr", col1, col2, method)
           })
+
+#' freqItems
+#'
+#' Finding frequent items for columns, possibly with false positives.
+#' This function is meant for exploratory data analysis, as we make no guarantee about the
+#' backward compatibility of the schema of the resulting DataFrame.
+#' 
+#' @param x A SparkSQL DataFrame
+#' @param cols The names of the columns to search frequent items in.
+#' @param support Optional. The minimum frequency for an item to be considered `frequent`.
+#'                Should be greater than 1e-4. The default value is 0.01.
+#' @return A Local DataFrame with the Array of frequent items for each column.
+#'
+#' @rdname statfunctions
+#' @name freqItems
+#' @export
+#' @examples
+#'\dontrun{
+#' df <- jsonFile(sqlCtx, "/path/to/file.json")
+#' freqItems <- freqItems(df, c("title", "gender"))
+#' freqItems <- freqItems(df, c("title", "gender"), 0.4)
+#' }
+setMethod("freqItems",
+          signature(x = "DataFrame", cols = "character", support = "numeric"),
+          function(x, cols, support = 0.01) {
+            statFunctions <- callJMethod(x@sdf, "stat")
+            sdf <- callJMethod(statFunctions, "freqItems", as.list(cols), support)
+            dataFrame(sdf)
+          })
+
+#' sampleBy
+#'
+#' Returns a stratified sample without replacement based on the fraction given on each stratum.
+#' 
+#' @param x A SparkSQL DataFrame
+#' @param col column that defines strata
+#' @param fractions sampling fraction for each stratum. If a stratum is not specified, we treat
+#'                  its fraction as zero.
+#' @param seed random seed
+#' @return A new DataFrame that represents the stratified sample
+#'
+#' @rdname statfunctions
+#' @name sampleBy
+#' @export
+#' @examples
+#'\dontrun{
+#' df <- jsonFile(sqlCtx, "/path/to/file.json")
+#' sample <- sampleBy(df, "key", fractions, 36)
+#' }
+setMethod("sampleBy",
+          signature(x = "DataFrame", col = "character", fractions = "environment", seed = "numeric"),
+          function(x, col, fractions, seed) {
+            statFunctions <- callJMethod(x@sdf, "stat")
+            # Seed is expected to be Long on Scala side, here convert it to an integer
+            # due to SerDe limitation now.
+            sdf <- callJMethod(statFunctions, "sampleBy", col, fractions, as.integer(seed))
+            dataFrame(sdf)
+          })
