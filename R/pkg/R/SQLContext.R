@@ -84,7 +84,25 @@ infer_type <- function(x) {
 #' }
 
 # TODO(davies): support sampling and infer type from NA
-createDataFrame <- function(sqlContext, data, schema = NULL, samplingRatio = 1.0) {
+createDataFrame <- function(x, ...) { UseMethod("createDataFrame") }
+
+createDataFrame.jobj <- function(sqlContext, data, schema = NULL, samplingRatio = 1.0) {
+  createDataFrameInternal(sqlContext, data, schema, samplingRatio)
+}
+
+createDataFrame.default <- function(data, schema = NULL, samplingRatio = 1.0) {
+  sqlContext <- if (exists(".sparkRHivesc", envir = .sparkREnv)) {
+    get(".sparkRHivesc", envir = .sparkREnv)
+  } else if (exists(".sparkRSQLsc", envir = .sparkREnv)) {
+    get(".sparkRSQLsc", envir = .sparkREnv)
+  } else {
+    stop("no SQL context available")
+  }
+  
+  createDataFrameInternal(sqlContext, data, schema, samplingRatio)
+}
+
+createDataFrameInternal <- function(sqlContext, data, schema = NULL, samplingRatio = 1.0) {
   if (is.data.frame(data)) {
       # get the names of columns, they will be put into RDD
       if (is.null(schema)) {
