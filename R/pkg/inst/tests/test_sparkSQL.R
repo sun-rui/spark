@@ -129,21 +129,10 @@ test_that("create DataFrame from RDD", {
   expect_equal(dtypes(df), list(c("a", "int"), c("b", "string")))
 
   df <- jsonFile(sqlContext, jsonPathNa)
-  hiveCtx <- tryCatch({
-    newJObject("org.apache.spark.sql.hive.test.TestHiveContext", ssc)
-  },
-  error = function(err) {
-    skip("Hive is not build with SparkSQL, skipped")
-  })
-  sql(hiveCtx, "CREATE TABLE people (name string, age double, height float)")
-  insertInto(df, "people")
-  expect_equal(sql(hiveCtx, "SELECT age from people WHERE name = 'Bob'"), c(16))
-  expect_equal(sql(hiveCtx, "SELECT height from people WHERE name ='Bob'"), c(176.5))
-
   schema <- structType(structField("name", "string"), structField("age", "integer"),
                        structField("height", "float"))
-  df2 <- createDataFrame(sqlContext, df.toRDD, schema)
-  df2AsDF <- as.DataFrame(sqlContext, df.toRDD, schema)
+  df2 <- createDataFrame(sqlContext, toRDD(df), schema)
+  df2AsDF <- as.DataFrame(sqlContext, toRDD(df), schema)
   expect_equal(columns(df2), c("name", "age", "height"))
   expect_equal(columns(df2AsDF), c("name", "age", "height"))
   expect_equal(dtypes(df2), list(c("name", "string"), c("age", "int"), c("height", "float")))
@@ -160,6 +149,19 @@ test_that("create DataFrame from RDD", {
   expect_equal(columns(df), c("name", "age", "height"))
   expect_equal(dtypes(df), list(c("name", "string"), c("age", "int"), c("height", "float")))
   expect_equal(collect(where(df, df$name == "John")), c("John", 19, 164.10))
+
+  df <- jsonFile(sqlContext, jsonPathNa)
+  ssc <- callJMethod(sc, "sc")
+  hiveCtx <- tryCatch({
+    newJObject("org.apache.spark.sql.hive.test.TestHiveContext", ssc)
+  },
+  error = function(err) {
+    skip("Hive is not build with SparkSQL, skipped")
+  })
+  sql(hiveCtx, "CREATE TABLE people (name string, age double, height float)")
+  insertInto(df, "people")
+  expect_equal(sql(hiveCtx, "SELECT age from people WHERE name = 'Bob'"), c(16))
+  expect_equal(sql(hiveCtx, "SELECT height from people WHERE name ='Bob'"), c(176.5))
 })
 
 test_that("convert NAs to null type in DataFrames", {
@@ -245,7 +247,7 @@ test_that("create DataFrame from list or data.frame", {
   ldf2 <- collect(df)
   expect_equal(ldf$a, ldf2$a)
 
-  irisdf <- createDataFrame(sqlContext, iris)
+  irisdf <- suppressWarnings(createDataFrame(sqlContext, iris))
   iris_collected <- collect(irisdf)
   expect_equivalent(iris_collected[,-5], iris[,-5])
   expect_equal(iris_collected$Species, as.character(iris$Species))
@@ -458,7 +460,7 @@ test_that("union on two RDDs created from DataFrames returns an RRDD", {
   RDD2 <- toRDD(df)
   unioned <- unionRDD(RDD1, RDD2)
   expect_is(unioned, "RDD")
-  expect_equal(SparkR:::getSerializedMode(unioned), "byte")
+  expect_equal(getSerializedMode(unioned), "byte")
   expect_equal(collect(unioned)[[2]]$name, "Andy")
 })
 
@@ -480,13 +482,13 @@ test_that("union on mixed serialization types correctly returns a byte RRDD", {
 
   unionByte <- unionRDD(rdd, dfRDD)
   expect_is(unionByte, "RDD")
-  expect_equal(SparkR:::getSerializedMode(unionByte), "byte")
+  expect_equal(getSerializedMode(unionByte), "byte")
   expect_equal(collect(unionByte)[[1]], 1)
   expect_equal(collect(unionByte)[[12]]$name, "Andy")
 
   unionString <- unionRDD(textRDD, dfRDD)
   expect_is(unionString, "RDD")
-  expect_equal(SparkR:::getSerializedMode(unionString), "byte")
+  expect_equal(getSerializedMode(unionString), "byte")
   expect_equal(collect(unionString)[[1]], "Michael")
   expect_equal(collect(unionString)[[5]]$name, "Andy")
 })
@@ -499,7 +501,7 @@ test_that("objectFile() works with row serialization", {
   objectIn <- objectFile(sc, objectPath)
 
   expect_is(objectIn, "RDD")
-  expect_equal(SparkR:::getSerializedMode(objectIn), "byte")
+  expect_equal(getSerializedMode(objectIn), "byte")
   expect_equal(collect(objectIn)[[2]]$age, 30)
 })
 
@@ -824,6 +826,7 @@ test_that("write.df() as parquet file", {
 })
 
 test_that("test HiveContext", {
+  ssc <- callJMethod(sc, "sc")
   hiveCtx <- tryCatch({
     newJObject("org.apache.spark.sql.hive.test.TestHiveContext", ssc)
   },
@@ -908,7 +911,7 @@ test_that("column functions", {
   # Test that stats::lag is working
   expect_equal(length(lag(ldeaths, 12)), 72)
 })
-#
+
 test_that("column binary mathfunctions", {
   lines <- c("{\"a\":1, \"b\":5}",
              "{\"a\":2, \"b\":6}",
@@ -1255,7 +1258,7 @@ test_that("toJSON() returns an RDD of the correct values", {
   df <- jsonFile(sqlContext, jsonPath)
   testRDD <- toJSON(df)
   expect_is(testRDD, "RDD")
-  expect_equal(SparkR:::getSerializedMode(testRDD), "string")
+  expect_equal(getSerializedMode(testRDD), "string")
   expect_equal(collect(testRDD)[[1]], mockLines[1])
 })
 
@@ -1585,7 +1588,7 @@ test_that("SQL error message is returned from JVM", {
   expect_equal(grepl("Table not found: blah", retError), TRUE)
 })
 
-irisDF <- createDataFrame(sqlContext, iris)
+irisDF <- suppressWarnings(createDataFrame(sqlContext, iris))
 
 test_that("Method as.data.frame as a synonym for collect()", {
   expect_equal(as.data.frame(irisDF), collect(irisDF))
@@ -1614,7 +1617,7 @@ test_that("attach() on a DataFrame", {
 })
 
 test_that("with() on a DataFrame", {
-  df <- createDataFrame(sqlContext, iris)
+  df <- suppressWarnings(createDataFrame(sqlContext, iris))
   expect_error(Sepal_Length)
   sum1 <- with(df, list(summary(Sepal_Length), summary(Sepal_Width)))
   expect_equal(collect(sum1[[1]])[1, "Sepal_Length"], "150")
