@@ -17,11 +17,13 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
-import org.apache.spark.sql.Encoder
+import org.apache.spark.SparkException
+import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.sql.{Encoder, Row}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedDeserializer
 import org.apache.spark.sql.catalyst.encoders._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.types.{DataType, ObjectType, StructType}
+import org.apache.spark.sql.types._
 
 object CatalystSerde {
   def deserialize[T : Encoder](child: LogicalPlan): DeserializeToObject = {
@@ -117,6 +119,42 @@ case class MapPartitions(
     deserializer: Expression,
     serializer: Seq[NamedExpression],
     child: LogicalPlan) extends UnaryNode with ObjectOperator
+
+object MapPartitionsInR {
+  def apply(
+      func: Array[Byte],
+      packageNames: Array[Byte],
+      broadcastVars: Array[Broadcast[Object]],
+      schema: StructType,
+      encoder: ExpressionEncoder[Row],
+      child: LogicalPlan): MapPartitionsInR = {
+    // If the content of current DataFrame is serialized R data?
+    val isSerializedRData =
+      if (encoder.schema == StructType(Seq(StructField("R", BinaryType)))) true else false
+
+    MapPartitionsInR(
+      func,
+      packageNames,
+      broadcastVars,
+      schema,
+      isSerializedRData,
+      UnresolvedDeserializer(encoder.deserializer),
+      RowEncoder(schema).namedExpressions,
+      child)
+  }
+}
+
+case class MapPartitionsInR(
+    func: Array[Byte],
+    packageNames: Array[Byte],
+    broadcastVars: Array[Broadcast[Object]],
+    outputSchema: StructType,
+    isSerializedRData: Boolean,
+    deserializer: Expression,
+    serializer: Seq[NamedExpression],
+    child: LogicalPlan) extends UnaryNode with ObjectOperator {
+  override lazy val schema = outputSchema
+}
 
 object MapElements {
   def apply[T : Encoder, U : Encoder](

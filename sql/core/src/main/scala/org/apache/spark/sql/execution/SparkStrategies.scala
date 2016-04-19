@@ -352,6 +352,9 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         execution.SerializeFromObject(serializer, planLater(child)) :: Nil
       case logical.MapPartitions(f, in, out, child) =>
         execution.MapPartitions(f, in, out, planLater(child)) :: Nil
+      case logical.MapPartitionsInR(f, p, b, s, isr, in, out, child) =>
+        execution.MapPartitions(
+          execution.r.MapPartitionsRWrapper(f, p, b, s, isr), in, out, planLater(child)) :: Nil
       case logical.MapElements(f, in, out, child) =>
         execution.MapElements(f, in, out, planLater(child)) :: Nil
       case logical.AppendColumns(f, in, out, child) =>
