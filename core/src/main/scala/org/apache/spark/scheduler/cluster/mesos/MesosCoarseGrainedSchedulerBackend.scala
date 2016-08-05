@@ -555,9 +555,9 @@ private[spark] class MesosCoarseGrainedSchedulerBackend(
       // Do not call removeExecutor() after this scheduler backend was stopped because
       // removeExecutor() internally will send a message to the driver endpoint but
       // the driver endpoint is not available now, otherwise an exception will be thrown.
-      if (!stopCalled) {
+//      if (!stopCalled) {
         removeExecutor(taskId, SlaveLost(reason))
-      }
+//      }
       slaves(slaveId).taskIDs.remove(taskId)
     }
   }
