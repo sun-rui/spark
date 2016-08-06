@@ -25,7 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.mesos.{Protos, Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos._
 import org.apache.mesos.Protos.Value.Scalar
-import org.mockito.{ArgumentCaptor, Matchers}
+import org.mockito.{ArgumentMatcher, ArgumentCaptor, Matchers}
 import org.mockito.Matchers._
 import org.mockito.Mockito._
 import org.scalatest.mock.MockitoSugar
@@ -34,8 +34,10 @@ import org.scalatest.BeforeAndAfter
 import org.apache.spark.{LocalSparkContext, SecurityManager, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.network.shuffle.mesos.MesosExternalShuffleClient
 import org.apache.spark.rpc.RpcEndpointRef
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessage.RemoveExecutor
-import org.apache.spark.scheduler.TaskSchedulerImpl
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessage
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RemoveExecutor
+import org.apache.spark.scheduler.{TaskSchedulerImpl, SlaveLost}
+import org.apache.spark.{TaskState => SparkTaskState}
 
 class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     with LocalSparkContext
@@ -263,20 +265,26 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite
     verifyTaskLaunched("o1")
 
     // launches a thread simulating status update
+    val status = createTaskStatus("0", "s1", TaskState.TASK_FINISHED)
     val statusUpdateThread = new Thread {
       override def run(): Unit = {
         while (!stopCalled) {
           Thread.sleep(100)
         }
 
-        val status = createTaskStatus("0", "s1", TaskState.TASK_FINISHED)
         backend.statusUpdate(driver, status)
       }
     }.start
 
     backend.stop
-    verify(driverEndpoint, never()).askWithRetry[Boolean](
-      Matchers.eq(RemoveExecutor(anyObject, anyObject)))
+    val state = SparkTaskState.fromMesos(status.getState)
+    verify(driverEndpoint, never()).askWithRetry(
+//      Matchers.eq(RemoveExecutor("0", SlaveLost(s"Executor finished with state $state"))))
+      argThat(new ArgumentMatcher[Any]() {
+        override def matches(message: Any): Boolean = {
+          message.isInstanceOf[RemoveExecutor]
+        }
+      }), anyObject)
   }
 
   private def verifyDeclinedOffer(driver: SchedulerDriver,
